@@ -2,7 +2,7 @@
 // В память записываются только нормальные ответы сайта: если сайт недоступен
 // или отвечает ошибкой (например, 404), программа работает из сохранённой копии.
 // При изменении программы поменяйте номер версии — телефон обновит файлы при следующем выходе в сеть.
-const CACHE = 'navigator-v2';
+const CACHE = 'navigator-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

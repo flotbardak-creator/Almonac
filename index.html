@@ -122,6 +122,7 @@ td small{display:block;color:var(--mute);font-size:12px}
       <label class="wide"><span data-t="object"></span><select id="j.body"></select></label>
      </div>
      <div class="tm" style="margin-top:10px"><label><span data-t="date"></span><input id="j.date" type="date"></label><label><span data-t="time"></span><input id="j.time" placeholder="08:45:00"></label><button class="b" id="j.now" data-t="now"></button></div>
+     <p class="note" id="jClock" style="margin-top:4px"></p>
      <div class="f" style="margin-top:10px">
       <label><span data-t="hg"></span><input id="j.hg" class="key" inputmode="decimal"></label>
       <label id="j.bgBox"><span data-t="bg"></span><input id="j.bg" class="key" inputmode="decimal"></label>
@@ -544,7 +545,7 @@ const L = {
   oHow: 'Введите 2–4 высоты разных светил (лучше с разницей азимутов 60–120°). Счислимое место — из строки «Судно» на момент последней высоты; высоты, взятые раньше, программа приводит к этому моменту по курсу и скорости.',
   oK: t => `Обсервованное место на ${t} UTC`, oK1: 'Одна линия — место на ней, ближайшее к счислимому', oNeed: 'Введите хотя бы одну высоту: светило, время, отсчёт.',
   nev: (c, d) => `Невязка от счислимого: ${c}, ${d} мили.`, gps: (d, c) => `Расхождение с GPS: ${d} мили (${c} от GPS).`, gpsBad: 'Больше 2 миль — повторите наблюдения; если подтвердится, GPS под подозрением.', gpsOk: 'В пределах точности астрономии.',
-  toShip: 'Записать место в «Судно»', gpsBtn: 'GPS телефона', gpsWait: 'Ищу спутники… На мостике лучше выйти на крыло или подойти к окну.',
+  toShip: 'Записать место в «Судно»', clkRun: t => `Время идёт само · судовое ${t}. Замрёт, когда введёте пеленг.`, clkStop: t => `Время зафиксировано на момент ввода (судовое ${t}). «Сейчас» — пустить снова.`, gpsBtn: 'GPS телефона', gpsWait: 'Ищу спутники… На мостике лучше выйти на крыло или подойти к окну.',
   gpsOk: (a, t) => `Место с GPS телефона, точность ±${a} м, ${t} UTC.`, gpsDen: 'Доступ к местоположению запрещён. Разрешите его для этой страницы в настройках браузера (значок слева от адреса → Разрешения → Местоположение).',
   gpsNone: 'Телефон не смог определить место. Проверьте, включена ли геолокация в шторке телефона, и попробуйте у окна или на крыле.', gpsTime: 'Спутники не найдены за 40 секунд — попробуйте ближе к окну или на открытой палубе.',
   gpsNo: 'Браузер не даёт этой странице доступ к GPS. Откройте файл в Chrome (не во встроенном просмотрщике) или введите место вручную.', rms: v => `СКП линии ${v}′.`, lopT: 'ЛП', dr: 'Счисл.', fix: 'Обс.', gpsP: 'GPS' },
@@ -577,7 +578,7 @@ const L = {
   oHow: 'Enter 2–4 sights of different bodies (ideally 60–120° apart in azimuth). The DR is the “Ship” position at the time of the last sight; earlier sights are advanced to that time by course and speed.',
   oK: t => `Fix at ${t} UTC`, oK1: 'One line — the point on it nearest the DR', oNeed: 'Enter at least one sight: body, time, reading.',
   nev: (c, d) => `From DR: ${c}, ${d} nm.`, gps: (d, c) => `Difference from GPS: ${d} nm (${c} from GPS).`, gpsBad: 'Over 2 nm — repeat the sights; if confirmed, suspect the GPS.', gpsOk: 'Within celestial accuracy.',
-  toShip: 'Use as ship position', gpsBtn: 'Phone GPS', gpsWait: 'Searching for satellites… On the bridge, step onto the wing or go near a window.',
+  toShip: 'Use as ship position', clkRun: t => `Time is running · ship time ${t}. It freezes when you enter the bearing.`, clkStop: t => `Time fixed at the moment of entry (ship time ${t}). “Now” restarts it.`, gpsBtn: 'Phone GPS', gpsWait: 'Searching for satellites… On the bridge, step onto the wing or go near a window.',
   gpsOk: (a, t) => `Position from phone GPS, accuracy ±${a} m, ${t} UTC.`, gpsDen: 'Location access denied. Allow it for this page in the browser settings (icon left of the address → Permissions → Location).',
   gpsNone: 'The phone could not get a position. Check that location is on and try near a window or on the wing.', gpsTime: 'No satellites in 40 seconds — try near a window or on open deck.',
   gpsNo: 'The browser does not give this page access to GPS. Open the file in Chrome (not a built-in viewer) or enter the position by hand.', rms: v => `Line RMS ${v}′.`, lopT: 'LOP', dr: 'DR', fix: 'Fix', gpsP: 'GPS' }
@@ -701,7 +702,18 @@ function logList() {
     return `<li><div><b>${esc(m.Date)} ${esc(m['UTC / GMT'])}</b> · ${esc(m.Object)}<br>Gyro ${esc(m['Error Gyro'] || '—')} · Std ${esc(m['Error Standard'] || '—')} · Dev ${esc(m['Deviation Standard'] || '—')}</div><button class="x" data-del="${i}" aria-label="×">×</button></li>`; }).join('') : `<li><div class="k">${T.nothing}</div></li>`;
 }
 $('jLog').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return; S.log.splice(+b.dataset.del, 1); save(); logList(); });
-$('jSave').addEventListener('click', () => { if (!JROW) return; S.log.push(JROW.map(r => [r[0], r[1], r[2]])); save(); logList(); $('jMsg').textContent = T.saved; });
+if (S.j.auto == null) S.j.auto = !String(S.j.bg || '').trim();
+const shipT = () => { const ms = utcMs(S.j.date, parseTime(S.j.time)); return isFinite(ms) ? new Date(ms + tzOf() * 3600000).toISOString().slice(11, 16) : '—'; };
+function clock() {
+  if (S.j.auto) { const [d, t] = nowUTC(); if (S.j.time !== t || S.j.date !== d) { S.j.date = d; S.j.time = t; $('j.date').value = d; $('j.time').value = t; jlog(); } }
+  $('jClock').textContent = S.j.auto ? T.clkRun(shipT()) : T.clkStop(shipT());
+}
+const setAuto = v => { S.j.auto = v; save(); clock(); };
+['j.date', 'j.time'].forEach(id => $(id).addEventListener('input', () => setAuto(false)));
+['j.bg', 'j.hg', 'j.hs', 'j.eg'].forEach(id => $(id).addEventListener('input', () => { if (S.j.auto) { clock(); setAuto(false); } }));
+$('j.now').addEventListener('click', () => setAuto(true));
+setInterval(() => { if (!$('p-log').hidden && S.j.auto) clock(); }, 1000);
+$('jSave').addEventListener('click', () => { if (!JROW) return; S.log.push(JROW.map(r => [r[0], r[1], r[2]])); S.j.bg = ''; S.j.hs = ''; $('j.bg').value = ''; $('j.hs').value = ''; save(); logList(); $('jMsg').textContent = T.saved; setAuto(true); });
 $('jCopy').addEventListener('click', async () => {
   const rows = S.log.length ? S.log : JROW ? [JROW] : []; if (!rows.length) return;
   const txt = [rows[0].map(r => (r[0] ? r[0] + ' ' : '') + r[1]).join('\t'), ...rows.map(r => r.map(x => x[2]).join('\t'))].join('\n');
@@ -863,7 +875,7 @@ function applyLang() {
   document.querySelectorAll('[data-t]').forEach(el => el.textContent = T[el.dataset.t]);
   document.querySelectorAll('[data-lang]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === S.lang));
   $('dome').setAttribute('aria-label', T.tSky); $('aPic').setAttribute('aria-label', T.rInt); $('oPic').setAttribute('aria-label', T.oH);
-  opts(); oRows(); shipSum(); jlog(); logList(); plan(); sky(); alt(); fix();
+  opts(); oRows(); shipSum(); jlog(); logList(); plan(); sky(); alt(); fix(); if (typeof clock === 'function' && $('jClock')) try { clock(); } catch (e) { }
 }
 document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { S.lang = b.dataset.lang; save(); applyLang(); }));
 const TABS = ['log', 'sky', 'alt', 'fix'];
@@ -877,7 +889,7 @@ function show(t) {
 document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { location.hash = b.dataset.tab; show(b.dataset.tab); window.scrollTo(0, 0); }));
 addEventListener('hashchange', () => show(location.hash.slice(1)));
 const ro = new ResizeObserver(() => { dome(); alt(); fix(); }); [$('dome').parentElement, $('aPic').parentElement, $('oPic').parentElement].forEach(el => ro.observe(el));
-fill(); devGrid(); applyLang(); show(location.hash.slice(1));
+fill(); devGrid(); applyLang(); show(location.hash.slice(1)); clock();
 if (!pos()) $('shipBox').hidden = false;
 }
 </script>
